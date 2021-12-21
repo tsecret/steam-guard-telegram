@@ -1,6 +1,5 @@
-[
-    {
-        "username": "username here",
-        "shared_secret": "shared_secret here"
+{
+    "username": {
+        "shared_secret": "shared_secret_here"
     }
-]
+}
