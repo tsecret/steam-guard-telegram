@@ -28,7 +28,7 @@ def getTwoFactorCode(shared_secret: str) -> str:
 # Loading accounts from the list
 def loadAccounts() -> list:
     try:
-        with open(config.ACCOUNTS_FILE_NAME, 'r') as file:
+        with open(f"./steam/{config.ACCOUNTS_FILE_NAME}", 'r') as file:
             return json.load(file)
     except Exception as err:
         print("loadAccounts() error: ", err)
