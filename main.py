@@ -1,76 +1,52 @@
 import telebot
-import base64
-import hmac
-import json
-import struct
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import time
-from hashlib import sha1
 import config
 import threading
 
-bot = telebot.TeleBot(config.TELEGRAM_BOT_API)
+import steam.__main__ as steam
+import authentificator.__main__ as auth
 
-activeMessages = []
-
-# Simple function that generates steam codes by passing shared secret key
-def getTwoFactorCode(shared_secret: str) -> str:
-    timestamp = int(time.time())
-    time_buffer = struct.pack('>Q', timestamp // 30)
-    time_hmac = hmac.new(base64.b64decode(shared_secret), time_buffer, digestmod=sha1).digest()
-    begin = ord(time_hmac[19:20]) & 0xf
-    full_code = struct.unpack('>I', time_hmac[begin:begin + 4])[0] & 0x7fffffff
-    chars = '23456789BCDFGHJKMNPQRTVWXY'
-    code = ''
-    for _ in range(5):
-        full_code, i = divmod(full_code, len(chars))
-        code += chars[i]
-    return code
-
-# Loading accounts from the list
-def loadAccounts() -> list:
-    try:
-        with open(config.ACCOUNTS_FILE_NAME, 'r') as file:
-            return json.load(file)
-    except Exception as err:
-        print("loadAccounts() error: ", err)
-        return []
-
-def generateCodes() -> str:
-    try:
-        accounts = loadAccounts()
-        msg=""
-
-
-        for username in accounts:
-            if "shared_secret" in accounts[username]:
-                msg = msg + f"{username}: {getTwoFactorCode(accounts[username]['shared_secret'])}\n"
-
-        return msg
-    except Exception as e:
-        print("Error: ", e)
-        return "Error using the bot"
+API_TOKEN = '812906647:AAHGW74HYpmj-gZBgyZ9Ph9XdPyXSRMIXk8'
+bot = telebot.TeleBot(API_TOKEN)
 
 def terminateMessage(chat_id, messages, terminationTime):
-    while int(time.time()) < terminationTime:
+    try:
+        while int(time.time()) < terminationTime:
+            pass
+        for message in messages:
+            bot.delete_message(chat_id=chat_id, message_id=message)
+    except:
         pass
-    for message in messages:
-        bot.delete_message(chat_id=chat_id, message_id=message)
 
-# Handling the incoming telegram message
+def send(chat_id, message, reply_markup=None):
+    msg = bot.send_message(chat_id, message, reply_markup=reply_markup)
+    threading.Thread(target=terminateMessage, args=(msg.chat.id, [msg.message_id, msg.message_id], time.time() + config.DELETE_TIME)).start()
+
+def gen_markup():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(
+        InlineKeyboardButton("Steam Guard", callback_data="steam_guard"),
+        InlineKeyboardButton("Auth Codes", callback_data="auth_codes")
+    )
+    return markup
+
 @bot.message_handler(commands=['start', 'menu'])
 def start(message):
     if message.chat.id not in config.WHITELIST:
-        bot.send_message(message.chat.id, "You are not in whitelist")
+        send(message.chat.id, "You are not in whitelist")
+    send(message.chat.id, "Select:", reply_markup=gen_markup())
 
-    msg = generateCodes()
-    botmsg = bot.send_message(message.chat.id, msg)
-    threading.Thread(target=terminateMessage, args=(message.chat.id, [botmsg.message_id, message.message_id], time.time() + config.DELETE_TIME)).start()
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "steam_guard":
+        send(call.from_user.id, "Select Steam account:", reply_markup=steam.generateOptions())
+    elif call.data == "auth_codes":
+        send(call.from_user.id, "Authentification accounts:", reply_markup=auth.generateOptions())
+    elif call.data.startswith('steam_account_'):
+        steam.processCallbackQuery(send, call)
+    elif call.data.startswith('auth_account_'):
+        auth.processCallbackQuery(send, call)
 
-while True:
-    try:
-        print("Bot running")
-        bot.polling(none_stop=True, timeout=15)
-    except KeyboardInterrupt:
-        exit()
-    except Exception as e:
-        time.sleep(20)
+bot.infinity_polling()
