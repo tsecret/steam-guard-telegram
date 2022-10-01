@@ -1,3 +1,4 @@
 config.py
-accounts.json
+*.json
 __pycache__/
+.venv
