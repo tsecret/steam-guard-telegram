@@ -5,10 +5,10 @@ import struct
 from hashlib import sha1
 import time
 import sys
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 sys.path.append('.')
-import config
+from config import config
 
 
 # Simple function that generates steam codes by passing shared secret key
@@ -28,26 +28,31 @@ def getTwoFactorCode(shared_secret: str) -> str:
 # Loading accounts from the list
 def loadAccounts() -> list:
     try:
-        with open(f"./steam/{config.ACCOUNTS_FILE_NAME}", 'r') as file:
+        with open(f"./steam/accounts.json", 'r') as file:
             return json.load(file)
     except Exception as err:
         print("loadAccounts() error: ", err)
         return []
 
-def generateOptions():
+def generateOptions(userId: str):
+    userId = str(userId)
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
 
     accounts = loadAccounts()
 
     for username in accounts:
-        if "shared_secret" in accounts[username]:
+        if "shared_secret" in accounts[username] and username in config.users[userId]['steamAccounts']:
             markup.add(InlineKeyboardButton(username, callback_data=f"steam_account_{username}"))
     return markup
 
-def processCallbackQuery(send, call):
+def processCallbackQuery(send, call: CallbackQuery):
     username = call.data[14:]
     send(call.from_user.id, generateCode(username))
+    
+    accounts = loadAccounts()
+    if accounts[username]['owner']:
+        send(accounts[username]['owner'], f"{call.from_user.first_name} generated Steam Guard for account {username}")
 
 def generateCode(username) -> str:
     try:
